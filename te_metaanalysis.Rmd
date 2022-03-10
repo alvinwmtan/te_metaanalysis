@@ -1,0 +1,79 @@
+---
+title: "TE Meta-analysis"
+author: "Alvin Tan"
+date: "2022-03-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(meta)
+```
+
+## Import data
+```{r import, include=FALSE}
+data_df <- read_tsv("data.tsv") |>
+  select(!(`Publication Year`:Url)) |>
+  mutate(`%TE` = as.double(`%TE`),
+         `%TE(either)` = as.double(`%TE(either)`),
+         Measure = fct_recode(`C/P`, "Comprehension" = "C", "Production" = "P"),
+         `Study name` = sub("–", "-", `Study name`))
+```
+
+```{r descriptives}
+num_te_discuss <- sum(data_df$`Discusses TEs?`, na.rm = TRUE)
+
+langs_list <- list()
+for (i in data_df$Langs) {
+  langs_list <- c(langs_list, str_split(i, ","))
+}
+langs_list <- langs_list |> unlist()
+langs_hist <- langs_list |> table() |> as_tibble()
+
+studies_con <- data_df |> 
+  filter(!is.na(`SD(%TE)`))
+num_studies_con <- studies_con |> nrow()
+
+studies_lib <- data_df |>
+  filter(!is.na(`SD(%TE(either))`))
+num_studies_lib <- studies_lib |> nrow()
+```
+
+```{r lang-hist}
+lh <- ggplot(data = langs_hist, aes(x = reorder(langs_list, -n), y = n)) +
+  geom_col() +
+  xlab("Language")
+lh
+```
+
+```{r meta-analysis}
+ma_con <- metamean(n = N,
+                   mean = `%TE(either)`,
+                   sd = `SD(%TE(either))`,
+                   studlab = `Study name`,
+                   data = studies_con,
+                   sm = "MRAW",
+                   random = TRUE,
+                   method.tau = "REML",
+                   title = "Proportion of TEs",
+                   subgroup = Measure)
+summary(ma_con)
+
+ma_lib <- metamean(n = N,
+                   mean = `%TE(either)`,
+                   sd = `SD(%TE(either))`,
+                   studlab = `Study name`,
+                   data = studies_lib,
+                   sm = "MRAW",
+                   random = TRUE,
+                   method.tau = "REML",
+                   title = "Proportion of TEs",
+                   subgroup = Measure)
+summary(ma_lib)
+```
+
+```{r forest}
+forest.meta(ma_con, sortvar = `%TE(either)`)
+forest.meta(ma_lib, sortvar = `%TE(either)`)
+```
